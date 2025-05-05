@@ -1,0 +1,28 @@
+# Игнорируем виртуальное окружение
+.venv/
+venv/
+ENV/
+env/
+
+# Игнорируем системные и IDE-штуки
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# MacOS
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Git
+.git
+.gitignore
+
+# Файлы конфигурации IDE
+.idea/
+
+# Dockerfile временные штуки
+*.tar

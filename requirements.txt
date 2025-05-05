@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+psycopg2-binary
+python-dotenv
+pydantic
+passlib[bcrypt]
+python-jose[cryptography]
+email-validator
+python-multipart
+bcrypt==3.2.2
+pydantic-settings
+
