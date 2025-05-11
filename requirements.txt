@@ -11,4 +11,4 @@ email-validator
 python-multipart
 bcrypt==3.2.2
 pydantic-settings
-
+python-dateutil>=2.8.2

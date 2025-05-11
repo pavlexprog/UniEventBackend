@@ -1,7 +1,7 @@
 # routers/events.py
 # Импорт enum, если вынесен отдельно
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status, Query, Form, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.db.session import get_db
@@ -11,10 +11,9 @@ from app.schemas.event import EventCreate, EventOut, EventUpdate
 from app.routes.auth import get_current_user, get_current_admin
 from sqlalchemy import desc, asc
 from app.schemas.event import EventCategory
-
+from dateutil.parser import parse
 
 router = APIRouter(prefix="/events", tags=["Мероприятия"])
-
 
 @router.post("/", response_model=EventOut)
 def create_event(event: EventCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
@@ -28,6 +27,8 @@ def create_event(event: EventCreate, db: Session = Depends(get_db), current_user
 MAX_LIMIT = 100
 
 
+
+
 @router.get("/", response_model=List[EventOut])
 def get_all_events(
     db: Session = Depends(get_db),
@@ -35,7 +36,9 @@ def get_all_events(
     limit: int = Query(10, le=MAX_LIMIT),
     sort_by: str = Query("event_date", enum=["event_date", "created_at"]),
     order: str = Query("asc", enum=["asc", "desc"]),
-    category: Optional[EventCategory] = Query(None)
+    category: Optional[EventCategory] = Query(None),
+     is_approved: Optional[bool] = Query(None)
+    
 ):
     order_func = asc if order == "asc" else desc
 
@@ -43,6 +46,8 @@ def get_all_events(
 
     if category:
         query = query.filter(Event.category == category)
+    if is_approved is not None:  # 👈 добавь фильтрацию по статусу
+        query = query.filter(Event.is_approved == is_approved)
 
     if sort_by == "event_date":
         query = query.order_by(order_func(Event.event_date))
