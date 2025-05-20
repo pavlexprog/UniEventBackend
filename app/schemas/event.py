@@ -2,6 +2,10 @@ from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel
 from enum import Enum
+from app.schemas.common import UserOut
+from pydantic import ConfigDict
+# from app.schemas.user import UserOut
+
 
 class EventCategory(str, Enum):
     concert = "Концерт"
@@ -14,7 +18,8 @@ class EventBase(BaseModel):
     description: str
     event_date: datetime
     category: EventCategory
-    image_url: Optional[str] = None
+    image_url: Optional[List[str]] = None
+
 
 class EventCreate(EventBase):
     pass
@@ -24,7 +29,7 @@ class EventUpdate(BaseModel):
     description: Optional[str] = None
     event_date: Optional[datetime] = None
     category: Optional[EventCategory] = None
-    image_url: Optional[str] = None
+    image_url: Optional[List[str]] = None
     is_approved: Optional[bool] = None  # 👈 здесь можно обновлять
 
 class EventOut(EventBase):
@@ -32,9 +37,15 @@ class EventOut(EventBase):
     created_at: datetime
     creator_id: int
     is_approved: bool
+    participants_count: Optional[int] = 0
+    is_favorite: Optional[bool] = False
+
+    model_config = ConfigDict(from_attributes=True)
 
 class EventRead(EventOut):
-    participants: List[int] = []
+    participants: List[UserOut] = []
+    creator: Optional[UserOut] = None
+    joined: Optional[bool] = False
+    
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

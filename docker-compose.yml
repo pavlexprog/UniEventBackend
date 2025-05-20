@@ -12,6 +12,7 @@ services:
       - db
     volumes:
       - ./app:/app/app
+      - ./media:/app/media
     restart: always
 
   db:

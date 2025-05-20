@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Table, Foreig
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.session import Base
-from app.db.models import event
+#from app.db.models import event
 user_event_association = Table(
     "user_event_association",
     Base.metadata,
@@ -20,8 +20,13 @@ class User(Base):
     avatar_url = Column(String, nullable=True)
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
 
-    attended_events = relationship(
-        "Event", secondary=user_event_association, back_populates="participants")
+    attended_events = relationship("Event", secondary=user_event_association, back_populates="participants")
     comments = relationship("Comment", back_populates="author")
     events_on_review = relationship("EventOnReview", back_populates="user")
+
+    created_events = relationship("Event", back_populates="creator")
+    favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
+

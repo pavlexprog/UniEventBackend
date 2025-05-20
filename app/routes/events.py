@@ -4,14 +4,17 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status, Query, Form, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from app.db.models.favorite import Favorite
 from app.db.session import get_db
 from app.db.models.user import User
 from app.db.models.event import Event
-from app.schemas.event import EventCreate, EventOut, EventUpdate
+from app.schemas.common import UserOut
+from app.schemas.event import EventCreate, EventOut, EventRead, EventUpdate
 from app.routes.auth import get_current_user, get_current_admin
 from sqlalchemy import desc, asc
 from app.schemas.event import EventCategory
-from dateutil.parser import parse
+from sqlalchemy.orm import joinedload
+
 
 router = APIRouter(prefix="/events", tags=["Мероприятия"])
 
@@ -54,16 +57,60 @@ def get_all_events(
     else:
         query = query.order_by(order_func(Event.created_at))
 
-    events = query.offset(skip).limit(limit).all()
-    return events
+    events = query.options(joinedload(Event.participants)).offset(skip).limit(limit).all()
 
+# добавляем participants_count вручную
+    result = [
+    EventOut.from_orm(event).model_copy(update={
+        "participants_count": len(event.participants)
+    })
+    for event in events
+]
+    return result
 
-@router.get("/{event_id}", response_model=EventOut)
-def get_event(event_id: int, db: Session = Depends(get_db)):
-    event = db.query(Event).filter(Event.id == event_id).first()
+@router.get("/favorites", response_model=list[EventOut])
+def get_favorites(
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    favorites = (
+        db.query(Event)
+        .join(Favorite, Favorite.event_id == Event.id)
+        .filter(Favorite.user_id == user.id)
+        .all()
+    )
+    return favorites
+
+@router.get("/{event_id}", response_model=EventRead)
+def get_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    event = (
+        db.query(Event)
+        .options(joinedload(Event.creator), joinedload(Event.participants))
+        .filter(Event.id == event_id)
+        .first()
+    )
+
     if not event:
         raise HTTPException(status_code=404, detail="Мероприятие не найдено")
-    return event
+    
+    is_favorite = (
+        db.query(Favorite)
+        .filter_by(user_id=current_user.id, event_id=event.id)
+        .first() is not None
+        
+    )
+
+    # Используем from_orm и дополняем вычисляемыми полями
+    return EventRead.from_orm(event).model_copy(update={
+        "joined": current_user in event.participants,
+        "participants_count": len(event.participants),
+        "is_favorite": is_favorite,
+    })
+
 
 
 @router.put("/{event_id}", response_model=EventOut)
@@ -94,3 +141,62 @@ def delete_event(event_id: int, db: Session = Depends(get_db), current_user: Use
     db.delete(event)
     db.commit()
     return {"message": "Мероприятие удалено"}
+
+@router.get("/by-user/{user_id}", response_model=List[EventOut])
+def get_events_by_user(user_id: int, db: Session = Depends(get_db)):
+    return db.query(Event).filter(Event.creator_id == user_id).all()
+
+@router.post("/{event_id}/attend")
+def attend_event(event_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    event = db.query(Event).filter(Event.id == event_id).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+
+    if current_user in event.participants:
+        raise HTTPException(status_code=400, detail="Вы уже записались")
+
+    event.participants.append(current_user)
+    db.commit()
+    return {"detail": "Успешно записались на мероприятие"}
+
+
+@router.get("/{event_id}/participants", response_model=List[UserOut])
+def get_event_participants(event_id: int, db: Session = Depends(get_db)):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+    return event.participants
+
+@router.post("/{event_id}/cancel")
+def cancel_attendance(event_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+
+    if current_user not in event.participants:
+        raise HTTPException(status_code=400, detail="Вы не записаны")
+
+    event.participants.remove(current_user)
+    db.commit()
+    return {"detail": "Вы отменили участие"}
+
+@router.post("/{event_id}/favorite")
+def add_favorite(event_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    favorite = db.query(Favorite).filter_by(user_id=user.id, event_id=event_id).first()
+    if favorite:
+        raise HTTPException(status_code=400, detail="Уже в избранном")
+    db.add(Favorite(user_id=user.id, event_id=event_id))
+    db.commit()
+    return {"status": "added"}
+
+
+@router.post("/{event_id}/unfavorite")
+def remove_favorite(event_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    favorite = db.query(Favorite).filter_by(user_id=user.id, event_id=event_id).first()
+    if not favorite:
+        raise HTTPException(status_code=404, detail="Не в избранном")
+    db.delete(favorite)
+    db.commit()
+    return {"status": "removed"}
+
